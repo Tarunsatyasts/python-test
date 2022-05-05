@@ -1,0 +1,2 @@
+motor[gssapi,aws,ocsp,snappy,srv,zstd,encryption]
+pymongo
