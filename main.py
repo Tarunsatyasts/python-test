@@ -1,69 +1,45 @@
-from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo import MongoClient
 
-class Application:
-    """
-    Application 
-    """
-    def __init__(self, host:str = None,
-                username: str = None,
-                password: str = None) -> None:
-        """
-        host: string :> mongodb connection url
-        username: string :> mongodb username
-        password: string :> mongodb password
 
-        returns: None
-        
-        """
-        self.host = host
-        self.username = username
-        self.password = password
 
-        self.client: AsyncIOMotorClient = AsyncIOMotorClient(
-            host= self.host,
-            username=self.username,
-            password=self.password
-        )
+client  = MongoClient("_connectionurl_")
+# Get a new db client ... 
 
-        self.db = self.client["DataBase-B"]
-        self.collection  = self.db["ActiveEvents-B"]
+events = client.events_db.activeEvents
+bookmakers = client.bookmakers.bookmakers
+# Get collections from db ... 
 
-    async def run(self, bookmakerId:int,  bookmakerName:str ) -> None:
-        """
-        bookmakerId: int :> bookmaker id
-        bookmakerName: string :> bookmaker name
-        """
 
-        filtered_documents =  await self.collection.find(
+
+
+mapped_events = [] # New list to store mapped events
+
+for event in events.find({"isActive" : True}): # Iterating through every event ( which is an active event)
+    for bookmaker in bookmakers({"isActive" : True}): # Iterating through every bookmaker 
+        event.update(
             {
-                "bookmakerName" : bookmakerName,
-                "bookmakerId" : bookmakerId
-                
+                "bookmakerId" : bookmaker["id"],
+                "bookmakerName" : bookmaker['name']
             }
-        ).to_list(10000)
-            
-
-        mapping_collection = self.client['OddSandMore']["Mapping"]
-
-        await mapping_collection.insert_many(
-            [
-                document
-                for document in filtered_documents
-            ]
-        )
+        ) # Updating bookmaker detials on mapped events 
+        
+    mapped_events.append(
+        event
+    ) # Appending to new list 
 
 
+client.oddsandmore.mapping.insert_many(
+    mapped_events
+) # Inserting mapped data to database 
 
 
-if __name__ == "__main__":
-    from asyncio import run
-    app = Application(
-        host="mongodb://localhost:27017",
-        username="admin",
-        password="admin"
-    )
+# Pros
+# 1. Filtering documents  via inbuild Mongo filters 
+# 2. using pymongo to connect mongodb 
+# 3. We can save time and complexity by mapping single event data with multiple bookmakers using this process. 
 
-    run(app.run(
-        bookmakerId=31,
-        bookmakerName="sisal"
-    ))
+# Cons
+# 1. Using two loops
+# 2. Code runs in n^2 runtime
+# 3. Using linear iteration 
+# 4. The disadvantage of this method is that we don't know who is accessing the event in advance.
